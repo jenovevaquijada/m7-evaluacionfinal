@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Países - Evaluación M7</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .container { max-width: 1000px; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .error-msg { display: none; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4">🌍 Administración de Países</h2>
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">Agregar Nuevo País</div>
+        <div class="card-body">
+            <form id="form-pais" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" id="nombre" class="form-control" placeholder="Nombre del país" required>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" id="continente" class="form-control" placeholder="Continente" required>
+                </div>
+                <div class="col-md-4">
+                    <input type="number" id="poblacion" class="form-control" placeholder="Población" required>
+                </div>
+                <div class="col-md-6">
+                    <input type="number" id="pib_2019" class="form-control" placeholder="PIB 2019" required>
+                </div>
+                <div class="col-md-6">
+                    <input type="number" id="pib_2020" class="form-control" placeholder="PIB 2020" required>
+                </div>
+                <div class="col-12 text-center">
+                    <button type="submit" class="btn btn-success px-5">Guardar País</button>
+                </div>
+            </form>
+            <div id="mensaje-form" class="alert mt-3" style="display:none"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span>Lista de Países (Cursor)</span>
+            <div class="d-flex align-items-center gap-2">
+                <small>Mostrar:</small>
+                <select id="cantidad" class="form-select form-select-sm" style="width: 80px;" onchange="obtenerPaises(true)">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover mt-2">
+                <thead>
+                    <tr>
+                        <th>País</th>
+                        <th>Continente</th>
+                        <th>Población</th>
+                        <th>PIB 2019</th>
+                        <th>PIB 2020</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-cuerpo"></tbody>
+            </table>
+            <div class="text-center mt-3">
+                <button class="btn btn-outline-primary" onclick="obtenerPaises(false)">Cargar Siguiente Bloque ➡️</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const mostrarMensaje = (id, texto, esError = false) => {
+        const el = document.getElementById(id);
+        el.textContent = texto;
+        el.className = `alert mt-3 ${esError ? 'alert-danger' : 'alert-success'}`;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 4000);
+    };
+
+    const obtenerPaises = async (reiniciar = false) => {
+        const cantidad = document.getElementById('cantidad').value;
+        try {
+            const res = await fetch(`/paises?cantidad=${cantidad}&reiniciar=${reiniciar}`);
+            const data = await res.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            const tbody = document.getElementById('tabla-cuerpo');
+            if (reiniciar) tbody.innerHTML = ''; 
+
+            if (data.length === 0) {
+                alert("No hay más registros para mostrar.");
+                return;
+            }
+
+            data.forEach(p => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${p.nombre}</td>
+                        <td>${p.continente}</td>
+                        <td>${Number(p.poblacion).toLocaleString()}</td>
+                        <td>${p.pib_2019}</td>
+                        <td>${p.pib_2020}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="eliminarPais('${p.nombre}')">Eliminar</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            alert("Error al cargar datos: " + e.message);
+        }
+    };
+
+    document.getElementById('form-pais').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            nombre: document.getElementById('nombre').value,
+            continente: document.getElementById('continente').value,
+            poblacion: document.getElementById('poblacion').value,
+            pib_2019: document.getElementById('pib_2019').value,
+            pib_2020: document.getElementById('pib_2020').value
+        };
+
+        try {
+            const res = await fetch('/paises', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error);
+
+            mostrarMensaje('mensaje-form', data.mensaje);
+            document.getElementById('form-pais').reset();
+            obtenerPaises(true); 
+        } catch (e) {
+            mostrarMensaje('mensaje-form', e.message, true);
+        }
+    });
+
+const eliminarPais = async (nombre) => {
+    const nombreLimpio = nombre.trim();
+    if (!confirm(`¿Estás seguro de eliminar ${nombreLimpio}?`)) return;
+
+    try {
+        const res = await fetch(`/paises/${encodeURIComponent(nombreLimpio)}`, { 
+            method: 'DELETE' 
+        });
+        
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Error desconocido en el servidor");
+
+        alert(data.mensaje);
+        obtenerPaises(true); 
+    } catch (e) {
+        console.error("Error en catch frontend:", e);
+        alert("Error: " + e.message);
+    }
+};
+
+    window.onload = () => obtenerPaises(true);
+</script>
+
+</body>
+</html>
